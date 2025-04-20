@@ -8,10 +8,12 @@ import time
 import uvicorn
 import threading
 import json
+import smtplib
+from email.message import EmailMessage
 
 app = FastAPI()
 
-# Configurar CORS
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Modelo de alerta
+# Modelos
 class Alert(BaseModel):
     timestamp: str
     ip_src: str
@@ -29,7 +31,6 @@ class Alert(BaseModel):
     alert: str
     description: str
 
-# Modelo de persona
 class Person(BaseModel):
     name: str
     email: str
@@ -37,10 +38,9 @@ class Person(BaseModel):
 
 # Base de datos en memoria
 people_db = []
-
-# Archivo JSON donde se guardan los usuarios
 DATA_FILE = "people_db.json"
 
+# Cargar personas al iniciar
 def load_people():
     global people_db
     if os.path.exists(DATA_FILE):
@@ -52,9 +52,9 @@ def save_people():
     with open(DATA_FILE, "w") as file:
         json.dump([person.dict() for person in people_db], file, indent=4)
 
-# Cargar personas al iniciar
 load_people()
 
+# ENDPOINTS
 @app.get("/api/alerts", response_model=List[Alert])
 async def get_alerts():
     alert_path = r'C:\Snort\log\alert.ids'
@@ -64,7 +64,7 @@ async def get_alerts():
     try:
         with open(alert_path, 'r', encoding='utf-8', errors='ignore') as file:
             lines = file.readlines()
-        lines = lines[-3000:]
+        lines = lines[-100:]
 
         alerts = []
         for line in lines:
@@ -113,7 +113,41 @@ async def delete_person(email: str):
     save_people()
     return {"message": "Persona eliminada exitosamente"}
 
-# Configuración de Snort
+# ========= CORREO =============
+
+def send_email_alert(subject: str, content: str, to_email: str):
+    msg = EmailMessage()
+    msg.set_content(content)
+    msg['Subject'] = subject
+    msg['From'] = "pruebasnort01@gmail.com"
+    msg['To'] = to_email
+
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+            smtp.login("TUCORREO@gmail.com", "123456")
+            smtp.send_message(msg)
+            print("[+] Correo de estado enviado.")
+    except Exception as e:
+        print(f"[!] Error al enviar correo: {e}")
+
+# ========= MONITOREAR TIEMPO =============
+
+def monitor_snort_uptime():
+    print("[+] Monitoreando tiempo de ejecución de Snort...")
+    start_time = time.time()
+    while True:
+        elapsed = time.time() - start_time
+        if elapsed >= 30:  # 5 horas
+            send_email_alert(
+                subject="🚨 Snort sigue activo",
+                content="Snort ha estado en ejecución durante más de 5 horas.",
+                to_email="josi.i.dami@gmail.com"
+            )
+            break  # Solo lo envía una vez
+        time.sleep(60)  # Verifica cada minuto
+
+# ========= EJECUTAR SNORT Y API =============
+
 SNORT_COMMAND = [
     "snort", "-i", "4", "-A", "fast", "-c", "C:\\Snort\\etc\\snort.conf", "-l", "C:\\Snort\\log"
 ]
@@ -129,5 +163,9 @@ def run_api():
 if __name__ == "__main__":
     snort_thread = threading.Thread(target=run_snort)
     snort_thread.start()
+
+    monitor_thread = threading.Thread(target=monitor_snort_uptime)
+    monitor_thread.start()
+
     time.sleep(3)
     run_api()

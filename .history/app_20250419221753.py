@@ -60,29 +60,45 @@ async def get_alerts():
     alert_path = r'C:\Snort\log\alert.ids'
     if not os.path.exists(alert_path):
         raise HTTPException(status_code=404, detail="Archivo de alertas no encontrado")
-    
+
+    IMPORTANT_KEYWORDS = [
+        "SQL Injection",
+        "Denial of Service",
+        "Trojan",
+        "Exploit",
+        "Shellcode",
+        "Scan",
+        "Privilege Gain",
+        "Malware",
+        "Backdoor",
+        "Suspicious"
+    ]
+
     try:
         with open(alert_path, 'r', encoding='utf-8', errors='ignore') as file:
             lines = file.readlines()
-        lines = lines[-3000:]
 
         alerts = []
         for line in lines:
             try:
-                alert_data = {
-                    "timestamp": line.split(" ")[0],
-                    "ip_src": line.split(" ")[-4],
-                    "ip_dst": line.split(" ")[-3],
-                    "protocol": line.split(" ")[-2],
-                    "alert": line.split(" ")[1],
-                    "description": line.split("[**]")[1].split("[Classification:")[0].strip()
-                }
-                alerts.append(alert_data)
+                description = line.split("[**]")[1].split("[Classification:")[0].strip()
+                if any(keyword.lower() in description.lower() for keyword in IMPORTANT_KEYWORDS):
+                    alert_data = {
+                        "timestamp": line.split(" ")[0],
+                        "ip_src": line.split(" ")[-4],
+                        "ip_dst": line.split(" ")[-3],
+                        "protocol": line.split(" ")[-2],
+                        "alert": line.split(" ")[1],
+                        "description": description
+                    }
+                    alerts.append(alert_data)
             except Exception as parse_error:
                 print(f"Error al parsear la línea: {line}\nDetalle: {parse_error}")
-        return alerts
+        
+        return alerts if alerts else []
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/persons")
 async def register_person(person: Person):

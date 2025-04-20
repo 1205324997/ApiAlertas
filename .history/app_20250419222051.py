@@ -60,29 +60,51 @@ async def get_alerts():
     alert_path = r'C:\Snort\log\alert.ids'
     if not os.path.exists(alert_path):
         raise HTTPException(status_code=404, detail="Archivo de alertas no encontrado")
-    
+
     try:
         with open(alert_path, 'r', encoding='utf-8', errors='ignore') as file:
             lines = file.readlines()
-        lines = lines[-3000:]
 
         alerts = []
-        for line in lines:
+        keywords = ["trojan", "malware", "exploit", "attack", "sql injection", "dos", "worm", "backdoor"]
+
+        for line in reversed(lines):  # Desde la línea más reciente
+            if "[**]" not in line or "[Classification:" not in line:
+                continue  # ignoramos líneas que no tienen el formato esperado
+
             try:
-                alert_data = {
-                    "timestamp": line.split(" ")[0],
-                    "ip_src": line.split(" ")[-4],
-                    "ip_dst": line.split(" ")[-3],
-                    "protocol": line.split(" ")[-2],
-                    "alert": line.split(" ")[1],
-                    "description": line.split("[**]")[1].split("[Classification:")[0].strip()
-                }
-                alerts.append(alert_data)
+                parts = line.strip().split()
+                if len(parts) < 10:
+                    continue  # línea mal formada
+
+                description = line.split("[**]")[1].split("[Classification:")[0].strip()
+
+                if any(keyword in description.lower() for keyword in keywords):
+                    alert_data = {
+                        "timestamp": parts[0],
+                        "ip_src": parts[-4],
+                        "ip_dst": parts[-3],
+                        "protocol": parts[-2],
+                        "alert": parts[1],
+                        "description": description
+                    }
+                    alerts.append(alert_data)
+
+                if len(alerts) >= 50:
+                    break
+
             except Exception as parse_error:
-                print(f"Error al parsear la línea: {line}\nDetalle: {parse_error}")
+                print(f"Error al parsear línea: {line}\n{parse_error}")
+                continue
+
+        if not alerts:
+            raise HTTPException(status_code=404, detail="No se encontraron alertas relevantes.")
+        
         return alerts
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Error procesando alertas: {str(e)}")
+
 
 @app.post("/api/persons")
 async def register_person(person: Person):

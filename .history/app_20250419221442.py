@@ -56,7 +56,7 @@ def save_people():
 load_people()
 
 @app.get("/api/alerts", response_model=List[Alert])
-async def get_alerts():
+async def get_alerts(severity: str = "High", description_contains: str = ""):
     alert_path = r'C:\Snort\log\alert.ids'
     if not os.path.exists(alert_path):
         raise HTTPException(status_code=404, detail="Archivo de alertas no encontrado")
@@ -64,11 +64,11 @@ async def get_alerts():
     try:
         with open(alert_path, 'r', encoding='utf-8', errors='ignore') as file:
             lines = file.readlines()
-        lines = lines[-3000:]
 
         alerts = []
         for line in lines:
             try:
+                # Procesar línea de alerta
                 alert_data = {
                     "timestamp": line.split(" ")[0],
                     "ip_src": line.split(" ")[-4],
@@ -77,12 +77,22 @@ async def get_alerts():
                     "alert": line.split(" ")[1],
                     "description": line.split("[**]")[1].split("[Classification:")[0].strip()
                 }
-                alerts.append(alert_data)
+
+                # Filtrar por severidad en el campo 'alert' o 'description'
+                if severity.lower() in alert_data["alert"].lower() or severity.lower() in alert_data["description"].lower():
+                    # Filtrar por palabra clave en la descripción
+                    if description_contains.lower() in alert_data["description"].lower():
+                        alerts.append(alert_data)
             except Exception as parse_error:
                 print(f"Error al parsear la línea: {line}\nDetalle: {parse_error}")
+
+        if not alerts:
+            raise HTTPException(status_code=404, detail="No se encontraron alertas relevantes.")
+        
         return alerts
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/persons")
 async def register_person(person: Person):

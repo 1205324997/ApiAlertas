@@ -60,27 +60,37 @@ async def get_alerts():
     alert_path = r'C:\Snort\log\alert.ids'
     if not os.path.exists(alert_path):
         raise HTTPException(status_code=404, detail="Archivo de alertas no encontrado")
-    
+
     try:
         with open(alert_path, 'r', encoding='utf-8', errors='ignore') as file:
             lines = file.readlines()
-        lines = lines[-3000:]
 
         alerts = []
-        for line in lines:
+        keywords = ["trojan", "malware", "exploit", "attack", "sql injection", "dos", "worm", "backdoor"]
+        
+        for line in reversed(lines):  # desde las más recientes hacia atrás
             try:
-                alert_data = {
-                    "timestamp": line.split(" ")[0],
-                    "ip_src": line.split(" ")[-4],
-                    "ip_dst": line.split(" ")[-3],
-                    "protocol": line.split(" ")[-2],
-                    "alert": line.split(" ")[1],
-                    "description": line.split("[**]")[1].split("[Classification:")[0].strip()
-                }
-                alerts.append(alert_data)
+                description = line.split("[**]")[1].split("[Classification:")[0].strip()
+                if any(keyword in description.lower() for keyword in keywords):
+                    alert_data = {
+                        "timestamp": line.split(" ")[0],
+                        "ip_src": line.split(" ")[-4],
+                        "ip_dst": line.split(" ")[-3],
+                        "protocol": line.split(" ")[-2],
+                        "alert": line.split(" ")[1],
+                        "description": description
+                    }
+                    alerts.append(alert_data)
+                if len(alerts) >= 50:  # solo mostramos las primeras 50 importantes
+                    break
             except Exception as parse_error:
                 print(f"Error al parsear la línea: {line}\nDetalle: {parse_error}")
+
+        if not alerts:
+            raise HTTPException(status_code=404, detail="No se encontraron alertas relevantes.")
+        
         return alerts
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

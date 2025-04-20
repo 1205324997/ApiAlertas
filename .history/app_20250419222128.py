@@ -64,7 +64,7 @@ async def get_alerts():
     try:
         with open(alert_path, 'r', encoding='utf-8', errors='ignore') as file:
             lines = file.readlines()
-        lines = lines[-3000:]
+        lines = lines[-100:]
 
         alerts = []
         for line in lines:

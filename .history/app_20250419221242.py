@@ -64,7 +64,6 @@ async def get_alerts():
     try:
         with open(alert_path, 'r', encoding='utf-8', errors='ignore') as file:
             lines = file.readlines()
-        lines = lines[-3000:]
 
         alerts = []
         for line in lines:
@@ -83,6 +82,7 @@ async def get_alerts():
         return alerts
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/persons")
 async def register_person(person: Person):
